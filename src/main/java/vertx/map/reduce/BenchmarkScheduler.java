@@ -11,7 +11,7 @@ import java.util.concurrent.Executors;
 import java.util.stream.IntStream;
 
 @Log4j2
-public class App {
+public class BenchmarkScheduler {
 
     public static final List<Context> CTX = new ArrayList<>();
     public static final long DATA_LENGTH = 10000;
