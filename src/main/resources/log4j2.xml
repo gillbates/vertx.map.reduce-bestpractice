@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="[%d{MM-dd HH:mm:ss.SSS}][%thread][%-5level][%logger{1.}][%line] - [%msg]%n"/>
+        </Console>
+
+
+    </Appenders>
+    <Loggers>
+        <Root level="ERROR">
+            <AppenderRef ref="Console"/>
+        </Root>
+        <logger name="vertx.map.reduce" level="DEBUG" />
+        <logger name="io.vertx" level="ERROR"/>
+    </Loggers>
+</Configuration>
