@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 @Log4j2
@@ -15,6 +17,7 @@ public class BenchmarkScheduler {
 
     public static final List<Context> CTX = new ArrayList<>();
     public static final long DATA_LENGTH = 10000;
+    static final AtomicLong count = new AtomicLong();
     public static int CONCURRENT = Runtime.getRuntime().availableProcessors();
     public static final ExecutorService executor = Executors.newFixedThreadPool(CONCURRENT);
     public static int INDEX = 0;
@@ -28,26 +31,24 @@ public class BenchmarkScheduler {
                     options.setWorker(true);
                     options.setWorkerPoolName(poolName);
                     options.setWorkerPoolSize(poolSize);
+                    options.setInstances(poolSize);
                     Future<String> future = Future.succeededFuture();
-                    for (int i = 0; i < poolSize; i++) {
-                        future = future
-                                .compose(r -> vertx.deployVerticle(new WorkerPoolVerticle(), options))
-                                .compose(r -> vertx.deployVerticle(new EventLoopVerticle()));
-                    }
+                    future = future
+                            .compose(r -> vertx.deployVerticle(BenchmarkScheduler2.EventBusVerticle::new, options));
                     return future;
                 })
                 .map(r -> null);
     }
 
     public static void startRunFixedThreadPool(Vertx vertx, int jobId, long dataId, Promise<Void> promise) {
-        if (dataId == 0) log.debug("[{}] starting running", jobId);
+        if (dataId == 0) System.out.println("[" + jobId + "] starting running");
         runFixedThreadPool(vertx)
                 .onComplete(res -> {
                     if (res.succeeded()) {
                         if (dataId < DATA_LENGTH) {
                             startRunFixedThreadPool(vertx, jobId, dataId + 1, promise);
                         } else {
-                            log.debug("[{}] complete running", jobId);
+                            System.out.println("[" + jobId + "] complete running");
                             promise.complete();
                         }
                     } else {
@@ -57,14 +58,14 @@ public class BenchmarkScheduler {
     }
 
     public static void startRunWorkerContext(Vertx vertx, int jobId, long dataId, Promise<Void> promise) {
-        if (dataId == 0) log.debug("[{}] starting running", jobId);
+        if (dataId == 0) System.out.println("[" + jobId + "] starting running");
         runWorkerContext(vertx)
                 .onComplete(res -> {
                     if (res.succeeded()) {
                         if (dataId < DATA_LENGTH) {
                             startRunWorkerContext(vertx, jobId, dataId + 1, promise);
                         } else {
-                            log.debug("[{}] complete running", jobId);
+                            System.out.println("[" + jobId + "] complete running");
                             promise.complete();
                         }
                     } else {
@@ -74,14 +75,14 @@ public class BenchmarkScheduler {
     }
 
     public static void startRunEventBus(Vertx vertx, int jobId, long dataId, Promise<Void> promise) {
-        if (dataId == 0) log.debug("[{}] starting running", jobId);
+        if (dataId == 0) System.out.println("[" + jobId + "] starting running");
         runEventBus(vertx)
                 .onComplete(res -> {
                     if (res.succeeded()) {
                         if (dataId < DATA_LENGTH) {
                             startRunEventBus(vertx, jobId, dataId + 1, promise);
                         } else {
-                            log.debug("[{}] complete running", jobId);
+                            System.out.println("[" + jobId + "] complete running");
                             promise.complete();
                         }
                     } else {
@@ -109,27 +110,25 @@ public class BenchmarkScheduler {
     }
 
     public static Future<Void> runWorkerContext(Vertx vertx) {
-        Context currentCtx = vertx.getOrCreateContext();
-        Context workerCtx = CTX.get(getNextIndex());
-        Promise<Void> promise = Promise.promise();
-        workerCtx.runOnContext(v -> {
+        return vertx.executeBlocking(p -> {
             calculate();
-            currentCtx.runOnContext(r -> promise.complete());
-        });
-        return promise.future();
+            p.complete();
+        }, false);
     }
 
     public static void calculate() {
+        count.incrementAndGet();
         int a = 1;
         for (long i = 0; i < 100000L; i++) {
             a++;
         }
+//        log.debug("cal");
     }
 
     public static void scheduleWithFixedThreadPool() {
         Vertx vertx = Vertx.vertx();
         long start = System.currentTimeMillis();
-        List<Integer> jobs = IntStream.range(0, 100).boxed().toList();
+        List<Integer> jobs = IntStream.range(0, 100).boxed().collect(Collectors.toList());
         Future.succeededFuture()
                 .compose(v -> initializeRunTime(vertx))
                 .compose(v -> {
@@ -143,7 +142,7 @@ public class BenchmarkScheduler {
                 })
                 .onComplete(res -> {
                     if (res.succeeded()) {
-                        log.debug("all complete {} ms used", System.currentTimeMillis() - start);
+                        System.out.println("all complete " + (System.currentTimeMillis() - start) + " ms used " + count.get());
                     } else {
                         res.cause().printStackTrace();
                     }
@@ -151,11 +150,10 @@ public class BenchmarkScheduler {
     }
 
     public static void runOnWorkerContext() {
-        Vertx vertx = Vertx.vertx();
+        Vertx vertx = Vertx.vertx(new VertxOptions().setWorkerPoolSize(100));
         long start = System.currentTimeMillis();
-        List<Integer> jobs = IntStream.range(0, 100).boxed().toList();
+        List<Integer> jobs = IntStream.range(0, 100).boxed().collect(Collectors.toList());
         Future.succeededFuture()
-                .compose(v -> initializeRunTime(vertx))
                 .compose(v -> {
                     List<Future> futures = new ArrayList<>();
                     for (Integer id : jobs) {
@@ -167,7 +165,7 @@ public class BenchmarkScheduler {
                 })
                 .onComplete(res -> {
                     if (res.succeeded()) {
-                        log.debug("all complete {} ms used", System.currentTimeMillis() - start);
+                        System.out.println("all complete " + (System.currentTimeMillis() - start) + " ms used " + count.get());
                     } else {
                         res.cause().printStackTrace();
                     }
@@ -177,7 +175,7 @@ public class BenchmarkScheduler {
     public static void scheduleByEventBus() {
         Vertx vertx = Vertx.vertx();
         long start = System.currentTimeMillis();
-        List<Integer> jobs = IntStream.range(0, 100).boxed().toList();
+        List<Integer> jobs = IntStream.range(0, 100).boxed().collect(Collectors.toList());
         Future.succeededFuture()
                 .compose(v -> initializeRunTime(vertx))
                 .compose(v -> {
@@ -191,14 +189,23 @@ public class BenchmarkScheduler {
                 })
                 .onComplete(res -> {
                     if (res.succeeded()) {
-                        log.debug("all complete {} ms used", System.currentTimeMillis() - start);
+                        System.out.println("all complete " + (System.currentTimeMillis() - start) + " ms used");
                     } else {
                         res.cause().printStackTrace();
                     }
                 });
     }
 
+    public static void main(String[] args) {
 
+        log.debug("hallo");
+        //fastest schedule
+        scheduleWithFixedThreadPool();
+        //second fast
+//        runOnWorkerContext();
+        //third fast
+        // scheduleByEventBus();
+    }
 
     public static class WorkerPoolVerticle extends AbstractVerticle {
         @Override
@@ -207,7 +214,7 @@ public class BenchmarkScheduler {
         }
     }
 
-    public static class EventLoopVerticle extends AbstractVerticle {
+    public static class EventBusVerticle extends AbstractVerticle {
         @Override
         public void start() {
             vertx.eventBus().consumer("/test", this::onMessage);
@@ -217,16 +224,5 @@ public class BenchmarkScheduler {
             calculate();
             msg.reply("");
         }
-    }
-
-    public static void main(String[] args) {
-
-        log.debug("hello world");
-        //fastest schedule
-        scheduleWithFixedThreadPool();
-        //second fast
-//        runOnWorkerContext();
-        //third fast
-//        scheduleByEventBus();
     }
 }
