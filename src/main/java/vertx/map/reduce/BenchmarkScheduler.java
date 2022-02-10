@@ -2,7 +2,6 @@ package vertx.map.reduce;
 
 import io.vertx.core.*;
 import io.vertx.core.eventbus.Message;
-import lombok.extern.log4j.Log4j2;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,7 +11,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-@Log4j2
+
 public class BenchmarkScheduler {
 
     public static final List<Context> CTX = new ArrayList<>();
@@ -34,7 +33,7 @@ public class BenchmarkScheduler {
                     options.setInstances(poolSize);
                     Future<String> future = Future.succeededFuture();
                     future = future
-                            .compose(r -> vertx.deployVerticle(BenchmarkScheduler2.EventBusVerticle::new, options));
+                            .compose(r -> vertx.deployVerticle(BenchmarkScheduler.EventBusVerticle::new, options));
                     return future;
                 })
                 .map(r -> null);
@@ -198,7 +197,7 @@ public class BenchmarkScheduler {
 
     public static void main(String[] args) {
 
-        log.debug("hallo");
+        System.out.println("hallo");
         //fastest schedule
         scheduleWithFixedThreadPool();
         //second fast
